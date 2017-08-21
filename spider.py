@@ -106,7 +106,7 @@ class spider:
             self.logger.error(traceback.format_exc())
 
 def main():
-    url=["http://www.mm131.com/xinggan/list_6_98.html"]
+    url=["http://www.mm131.com/xinggan/list_6.html"]
     sp=spider()
     pagecode=sp.getWebList(url[0])
     # print pagecode
