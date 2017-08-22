@@ -1,13 +1,16 @@
 #coding:utf-8
 
 import sqlite3,time
+import threading
+
 class dbhand:
 	def __init__(self,logger):
 		self.logger=logger
+		self.lock = threading.Lock()
 	def dbconnect(self,db):
 		self.dbconn=None
 		try:
-			self.dbconn=sqlite3.connect(db)
+			self.dbconn=sqlite3.connect(db,check_same_thread = False)
 			self.con=self.dbconn.cursor()
 			self.logger.info("数据库已连接")
 			print "数据库已连接"
@@ -35,6 +38,7 @@ class dbhand:
 			for k,v in hash.items():
 				url.append((k,v))
 			sql1=' insert or ignore into urls (url,title)VALUES(?,?)'
+			self.lock.acquire(True)
 			self.con.executemany(sql1,url)
 		except sqlite3.IntegrityError:
 			self.logger.info("数据插入失败.")
@@ -43,26 +47,30 @@ class dbhand:
 		except Exception as e:
 			print e
 		else:
-			self.dbconn.commit()
+			self.commitall()
 			self.logger.info("数据插入成功.")
 			print time.strftime("%H:%M:%S",time.localtime()),"数据插入成功."
+		finally:
+			 self. lock.release()
 
-	def update(self,url,Done):
+	def update(self,url,Done=1):
 		sql='update urls set Done=%d where url="%s"'%(Done,url)
 		try:
+			self.lock.acquire(True)
 			self.con.execute(sql)
 		except Exception as e:
-			print e
+			print sql,'\n',e
 		else:
-			self.dbconn.commit()
+			self.commitall()
 			self.logger.info("数据更新成功.")
 			print "数据更新成功."
-
+		finally:
+			self.lock.release()
 	def commitall(self):
 		try:
 			self.dbconn.commit()
 		except sqlite3.IntegrityError:
-			pass
+			print
 		except:
 			pass
 	def geturl(self):
