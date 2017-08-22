@@ -3,16 +3,15 @@
 #@author:cnboy
 #@time:1101@qq.com
 #@description:
+import random
 import re,os,os.path
-import threading
-import threadpool
 import urllib
 
 import time
+import urllib2
 
 from logger import getlog
 from sqlhand import dbhand
-import  requests
 import traceback
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -22,7 +21,7 @@ class spider:
         self.path=os.path.join('.',"pic")
         if not os.path.exists(self.path):
           os.mkdir(self.path)
-        self.__info['logfile']="pic\\err.dat"
+        self.__info['logfile']="err.log"
         self.__info['loglevel']='info'
         self.logger = getlog(self.__info)
         self.db=dbhand(self.logger)
@@ -30,11 +29,47 @@ class spider:
         self.db.dbconnect(dbfile)
         self.db.init()
         pass
-    def getcode(self,url):
-        sock=urllib.urlopen(url)
 
+
+    def randHeader(self):
+        head_connection = ['Keep-Alive','close']
+        head_accept = ['text/html, application/xhtml+xml, */*']
+        head_accept_language = ['zh-CN,fr-FR;q=0.5','en-US,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3']
+        head_user_agent = ['Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
+                           'Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.95 Safari/537.36',
+                           'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; .NET4.0C; rv:11.0) like Gecko)',
+                           'Mozilla/5.0 (Windows; U; Windows NT 5.2) Gecko/2008070208 Firefox/3.0.1',
+                           'Mozilla/5.0 (Windows; U; Windows NT 5.1) Gecko/20070309 Firefox/2.0.0.3',
+                           'Mozilla/5.0 (Windows; U; Windows NT 5.1) Gecko/20070803 Firefox/1.5.0.12',
+                           'Opera/9.27 (Windows NT 5.2; U; zh-cn)',
+                           'Mozilla/5.0 (Macintosh; PPC Mac OS X; U; en) Opera 8.0',
+                           'Opera/8.0 (Macintosh; PPC Mac OS X; U; en)',
+                           'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.12) Gecko/20080219 Firefox/2.0.0.12 Navigator/9.0.0.6',
+                           'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Win64; x64; Trident/4.0)',
+                           'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)',
+                           'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.2; .NET4.0C; .NET4.0E)',
+                           'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Maxthon/4.0.6.2000 Chrome/26.0.1410.43 Safari/537.1 ',
+                           'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.2; .NET4.0C; .NET4.0E; QQBrowser/7.3.9825.400)',
+                           'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:21.0) Gecko/20100101 Firefox/21.0 ',
+                           'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/21.0.1180.92 Safari/537.1 LBBROWSER',
+                           'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; BIDUBrowser 2.x)',
+                           'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.11 TaoBrowser/3.0 Safari/536.11']
+
+
+        header = {
+            'Connection': head_connection[0],
+            'Accept': head_accept[0],
+            'Accept-Language': head_accept_language[1],
+            'User-Agent': head_user_agent[random.randrange(0,len(head_user_agent))]
+        }
+        return header
+
+    def getcode(self,url):
+        header=self.randHeader()
+        request=urllib2.Request(url,headers=header)
+        sock=urllib2.urlopen(request)
         if sock.getcode()==404 or sock.geturl()!=url:
-            self.logger.error(u"网页不可访问.")
+            self.logger.error(url+u"网页不可访问.")
             return None
         content=sock.read().decode("gbk")
         sock.close()
@@ -71,7 +106,14 @@ class spider:
         self.logger.info(url+str(len(WebList)))
         print "Done : %4d : %s"%(len(WebList),url)
         self.db.insert(WebList,"urls")
-        Lst=WebList.keys()
+        #查询未完成的链接
+        keys=url.split('/')[-2]
+        done=0
+        weblst=self.db.geturl(keys,done)
+        if not len(weblst):
+            print "%s Done."%keys
+            return
+        Lst=weblst.keys()
         time.sleep(1)
         pool = ThreadPool(4)
         results = pool.map(self.getimgdict,Lst)
@@ -81,6 +123,10 @@ class spider:
     def getimgdict(self,url):
         url0=url
         text='.html'
+        try:
+            keys=url.split('/')[-2]
+        except:
+            keys=''
         baseurl=re.sub(text,'',url)
         page=self.getcode(url)
         reg='<div class="content-page"><span class="page-ch">(.*?)</span><span'
@@ -97,11 +143,14 @@ class spider:
             result=re.findall(reg,page,re.S|re.M)
             if result:
                 title,urlimg=result[0][0],result[0][1]
-                self.SaveImg(urlimg,title)
+                self.SaveImg(urlimg,keys,title)
             break
         self.db.update(url0)
-    def SaveImg(self,url,title):
-        path=self.path+'\\'+re.sub('\(.*?\)','',title)
+    def SaveImg(self,url,keys,title):
+        path=self.path+'\\'+keys
+        if not os.path.exists(path):
+            os.mkdir(path)
+        path=path+'\\'+re.sub('\(.*?\)','',title)
         if not os.path.exists(path):
             os.mkdir(path)
         file=os.path.join(path,"%s.jpg"%title)
@@ -112,27 +161,4 @@ class spider:
         except Exception ,e:
             self.logger.error(traceback.format_exc())
 
-def main():
-    urls=[
-        # "http://www.mm131.com/xinggan/",
-        # 'http://www.mm131.com/qingchun/',
-        'http://www.mm131.com/xiaohua/',
-        'http://www.mm131.com/chemo/',
-        'http://www.mm131.com/qipao/'
-    ]
-    sp=spider()
-    pool = threadpool.ThreadPool(10)  #建立线程池，控制线程数量为10
-    reqs = threadpool.makeRequests(sp.getWebList, args_list=urls, callback=[])  #构建请求，now_time为要运行的函数，args_list为要多线程执行函数的参数，最后这个callback是可选的，是对前两个函数运行结果的操作
-    [pool.putRequest(req) for req in reqs]  #多线程一块执行
-    pool.wait()  #线程挂起，直到结束
 
-def test():
-    '''
-     url="http://www.mm131.com/chemo/"
-    sp=spider()
-    sp.getWebList(url)
-    '''
-    sp=spider()
-    sp.getimgdict("http://www.mm131.com/qingchun/1.html")
-main()
-# test()

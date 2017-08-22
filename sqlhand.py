@@ -63,7 +63,7 @@ class dbhand:
 		else:
 			self.commitall()
 			self.logger.info("数据更新成功.")
-			print "数据更新成功."
+			# print "数据更新成功."
 		finally:
 			self.lock.release()
 	def commitall(self):
@@ -73,9 +73,9 @@ class dbhand:
 			print
 		except:
 			pass
-	def geturl(self):
+	def geturl(self,keys='xinggan',done=0):
 		info={}
-		sql="select url,title from urls"
+		sql="select url,title from urls where url like '%"+keys+"%'" +" and done=%d"%done
 		try:
 			self.con.execute(sql)
 			for i in self.con.fetchall():
